@@ -1,4 +1,4 @@
-# seasonal_climate_spec v0.4
+# [ARCHIVED] seasonal_climate_spec v0.4
 
 > **Superseded:** 구현 기준은 `seasonal_climate_spec_v0.4.1.md`이다.
 > 이 문서는 이력 보존용이며 신규 구현 기준으로 사용하지 않는다.

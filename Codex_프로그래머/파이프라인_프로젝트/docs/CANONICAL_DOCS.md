@@ -1,6 +1,6 @@
 # Canonical docs
 
-이 문서는 MVP baseline 기준으로 어떤 문서를 최종 기준으로 볼지 고정한다.
+이 문서는 MVP baseline 기준으로 최종 기준 문서와 보관 문서를 물리적으로 구분한다.
 
 ## Canonical
 
@@ -40,21 +40,24 @@ Change history:
   docs/climate_algorithm_full_changelog.md
 ```
 
-## Deprecated / historical
-
-아래 문서는 삭제하지 않고 보관한다. 단, 구현 기준은 위 canonical 문서가 우선한다.
-
-```text
-docs/seasonal_climate_spec_v0.4.md
-  replaced by docs/seasonal_climate_spec_v0.4.1.md
-
-docs/moisture_transport_kernel_v0.2.5.md
-  replaced by docs/moisture_transport_kernel_v0.2.6.md
-```
-
-## Notes
+## Supporting notes
 
 ```text
 docs/mountain_barrier_pseudocode_v0.3.md
-  supporting design note. STEP 2 moisture/barrier 구현 참고 문서로 유지.
+  STEP 2 mountain barrier / moisture transport 참고 문서.
+
+docs/MVP_BASELINE_STATUS.md
+  현재 MVP baseline 실행 상태와 known limitation 기록.
+```
+
+## Archived / deprecated
+
+아래 문서는 삭제하지 않고 `docs/archive/deprecated/`에 보관한다. 구현과 검증 기준은 Canonical 문서가 우선한다.
+
+```text
+docs/archive/deprecated/seasonal_climate_spec_v0.4.md
+  replaced by docs/seasonal_climate_spec_v0.4.1.md
+
+docs/archive/deprecated/moisture_transport_kernel_v0.2.5.md
+  replaced by docs/moisture_transport_kernel_v0.2.6.md
 ```
