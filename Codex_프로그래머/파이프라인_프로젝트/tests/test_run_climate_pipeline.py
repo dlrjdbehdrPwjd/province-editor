@@ -196,6 +196,30 @@ class SeasonalClimateUnitTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exclude_from_sim"):
             climate.normalize_overrides(raw, ["x111111"])
 
+    def test_load_mapping_document_accepts_schema_version_provinces_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "province_constraints.yaml"
+            path.write_text(
+                'schema_version: "province_constraints.v0.1"\n'
+                "provinces:\n"
+                "  x111111:\n"
+                "    moisture_bonus: 0.2\n",
+                encoding="utf-8",
+            )
+            loaded = climate.load_mapping_document(path, "province_constraints.yaml", "province_constraints")
+        self.assertEqual(loaded, {"x111111": {"moisture_bonus": 0.2}})
+
+    def test_load_mapping_document_accepts_empty_schema_version_provinces_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "province_constraints.yaml"
+            path.write_text(
+                'schema_version: "province_constraints.v0.1"\n'
+                "provinces: {}\n",
+                encoding="utf-8",
+            )
+            loaded = climate.load_mapping_document(path, "province_constraints.yaml", "province_constraints")
+        self.assertEqual(loaded, {})
+
     def test_water_balance_conserves_available_water(self) -> None:
         land = ["x111111"]
         overrides = {"x111111": {"exclude_from_sim": False}}
@@ -214,8 +238,8 @@ class SeasonalClimateUnitTests(unittest.TestCase):
             world_path = root / "world.yaml"
             graph_path.write_text(json.dumps(graph_fixture()), encoding="utf-8")
             bootstrap_path.write_text(json.dumps(bootstrap_fixture()), encoding="utf-8")
-            constraints_path.write_text('province_constraints: {}\n', encoding="utf-8")
-            overrides_path.write_text('province_overrides: {}\n', encoding="utf-8")
+            constraints_path.write_text('schema_version: "province_constraints.v0.1"\nprovinces: {}\n', encoding="utf-8")
+            overrides_path.write_text('schema_version: "province_overrides.v0.1"\nprovinces: {}\n', encoding="utf-8")
             params_path.write_text('seasonal_climate:\n  max_spinup_years: 3\n', encoding="utf-8")
             world_path.write_text('climate_reference:\n  equator_temp_c: 28\n  pole_temp_c: -20\n  lapse_rate_c_per_km: 6.5\n', encoding="utf-8")
             args = argparse.Namespace(project_root=root, province_graph=graph_path, bootstrap_fields=bootstrap_path, province_constraints=constraints_path, province_overrides=overrides_path, params=params_path, world=world_path, max_spinup_years=50, allow_nonconverged=False)

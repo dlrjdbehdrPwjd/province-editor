@@ -320,7 +320,12 @@ def validate_upstream(
 
 def load_mapping_document(path: Path, label: str, root_key: str) -> dict[str, dict[str, Any]]:
     document = load_yaml(path, label)
-    raw = document.get(root_key, document if root_key not in document else {})
+    if root_key in document:
+        raw = document[root_key]
+    elif "provinces" in document:
+        raw = document["provinces"]
+    else:
+        raw = document
     if raw is None:
         return {}
     if not isinstance(raw, dict):
