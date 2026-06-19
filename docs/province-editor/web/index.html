@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>프로빈스 편집기</title>
+    <link rel="stylesheet" href="./style.css?v=20260616-4" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="toolbar" aria-label="지도 도구">
+        <div class="brand">프로빈스 편집기</div>
+        <div class="segmented" role="group" aria-label="선택 모드">
+          <button id="provinceMode" class="active" type="button" title="프로빈스 선택 (P)">프</button>
+          <button id="stateMode" type="button" title="주 선택 (S)">주</button>
+        </div>
+        <button id="zoomIn" type="button" title="확대 (= 또는 +)">+</button>
+        <button id="zoomOut" type="button" title="축소 (-)">-</button>
+        <button id="zoom1" type="button" title="1배 (1)">1</button>
+        <button id="zoom2" type="button" title="2배 (2)">2</button>
+        <button id="zoom4" type="button" title="4배 (3)">4</button>
+        <button id="zoom8" type="button" title="8배 (4)">8</button>
+        <button id="resetView" type="button" title="전체 보기 (5)">⛶</button>
+        <button id="clearSelection" type="button" title="선택 해제 (X)">×</button>
+      </aside>
+
+      <main class="mapPane">
+        <div class="canvasWrap" id="canvasWrap">
+          <canvas id="mapCanvas" width="2048" height="904"></canvas>
+          <canvas id="overlayCanvas" width="2048" height="904"></canvas>
+        </div>
+        <div class="statusbar">
+          <span id="loadStatus">불러오는 중</span>
+          <span id="cursorStatus">x: -, y: -</span>
+        </div>
+      </main>
+
+      <aside class="panel">
+        <header class="panelHeader">
+          <div>
+            <h1>지형 원인 설정</h1>
+            <p id="modeHelp">프로빈스 단위 조건과 예외를 편집합니다.</p>
+          </div>
+          <span id="dirtyBadge" class="badge muted">변경 없음</span>
+        </header>
+
+        <section class="section compact">
+          <h2>선택 정보</h2>
+          <dl class="meta">
+            <dt>모드</dt><dd id="selectedMode">프로빈스</dd>
+            <dt>색상</dt><dd id="selectedColor">-</dd>
+            <dt>주</dt><dd id="selectedState">-</dd>
+            <dt>면적</dt><dd id="selectedArea">-</dd>
+          </dl>
+        </section>
+
+        <section class="section" id="constraintSection">
+          <div class="sectionTitle">
+            <h2>시뮬레이션 입력</h2>
+            <span class="badge">원인값 입력</span>
+          </div>
+
+          <label>고도 힌트
+            <select id="elevationHint">
+              <option value="">미설정</option>
+              <option value="none">없음</option>
+              <option value="lowland">저지대</option>
+              <option value="upland">구릉지</option>
+              <option value="highland">고지대</option>
+              <option value="mountain">산악</option>
+            </select>
+          </label>
+
+          <label>산맥 장벽 강도 <span id="mountainValue" class="fieldValue">미설정</span>
+            <input id="mountainStrength" type="range" min="0" max="1" step="0.05" value="0" />
+            <small class="fieldHelp">바람과 수분 흐름을 막아 풍상측 강수와 풍하측 비그늘을 만드는 정도입니다.</small>
+          </label>
+          <label class="inlineCheck"><input id="mountainEnabled" type="checkbox" /> 산맥 장벽 값 사용</label>
+
+          <div class="two">
+            <label>수분 보정
+              <input id="moistureBonus" type="number" step="0.01" placeholder="0.00" />
+            </label>
+            <label>기온 보정 (°C)
+              <input id="temperatureDelta" type="number" step="0.1" placeholder="0.0" />
+            </label>
+          </div>
+          <label>강수 보정
+            <input id="rainfallDelta" type="number" step="0.01" placeholder="0.00" />
+          </label>
+          <label>판타지 권역
+            <input id="fantasyZone" type="text" placeholder="예: enchanted_forest" />
+          </label>
+
+          <fieldset id="anchorFields">
+            <legend>존재 앵커</legend>
+            <div class="checks">
+              <label><input id="riverSeed" type="checkbox" /> 강 시작점</label>
+              <label><input id="riverMajor" type="checkbox" /> 주요 하천</label>
+              <label><input id="lakeSeed" type="checkbox" /> 호수·종착점</label>
+              <label><input id="wetlandSeed" type="checkbox" /> 습지 발생점</label>
+            </div>
+          </fieldset>
+
+          <div class="actions">
+            <button id="applyConstraint" class="primary" type="button">조건 적용</button>
+            <button id="clearConstraint" type="button">조건 삭제</button>
+          </div>
+        </section>
+
+        <section class="section" id="overrideSection">
+          <div class="sectionTitle">
+            <h2>프로빈스 예외</h2>
+            <span class="badge warning">Province 전용</span>
+          </div>
+
+          <label class="switchRow">
+            <span><strong>최종 라벨 강제</strong><small>물리 시뮬레이션에는 계속 참여합니다.</small></span>
+            <input id="locked" type="checkbox" />
+          </label>
+          <div class="two lockedFields">
+            <label>지형
+              <select id="forceTerrain">
+                <option value="">미설정</option>
+                <option value="plains">평원</option>
+                <option value="forest">숲</option>
+                <option value="hills">구릉</option>
+                <option value="mountain">산악</option>
+                <option value="desert">사막</option>
+                <option value="wetland">습지</option>
+                <option value="jungle">밀림</option>
+                <option value="tundra">툰드라</option>
+                <option value="savanna">사바나</option>
+              </select>
+            </label>
+            <label>바이옴
+              <input id="forceBiome" type="text" placeholder="예: alpine_mountain" />
+            </label>
+          </div>
+          <details id="climateDetails">
+            <summary>고급 물리 강제</summary>
+            <label class="switchRow dangerRow">
+              <span><strong>기후값 강제</strong><small>주변 기후에 영향을 줄 수 있습니다.</small></span>
+              <input id="climateLock" type="checkbox" />
+            </label>
+            <div class="three climateFields">
+              <label>기온 °C<input id="forceTemp" type="number" step="0.1" /></label>
+              <label>수분 raw<input id="forceMoisture" type="number" step="0.01" /></label>
+              <label>강수 raw<input id="forceRainfall" type="number" step="0.01" /></label>
+            </div>
+            <label class="switchRow dangerRow">
+              <span><strong>시뮬레이션 제외</strong><small>극단적인 예외에만 사용합니다.</small></span>
+              <input id="excludeFromSim" type="checkbox" />
+            </label>
+          </details>
+
+          <div class="actions">
+            <button id="applyOverride" class="primary" type="button">예외 적용</button>
+            <button id="clearOverride" type="button">예외 삭제</button>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>검증</h2>
+          <div id="validationList" class="validation empty">현재 경고가 없습니다.</div>
+        </section>
+
+        <section class="section">
+          <h2>저장 및 내보내기</h2>
+          <label>편집자 ID
+            <input id="editorId" type="text" placeholder="Discord 이름 또는 담당 국가" />
+          </label>
+          <dl class="meta revisionMeta">
+            <dt>기준 revision</dt><dd id="baseRevision">계산 중</dd>
+            <dt>편집 province</dt><dd id="editedProvinceCount">0</dd>
+            <dt>직접 편집 state 규칙</dt><dd id="editedStateCount">0</dd>
+            <dt>자동 저장</dt><dd id="autosaveStatus">대기 중</dd>
+          </dl>
+          <div class="actions stacked">
+            <button id="downloadProject" type="button">작업 저장 JSON</button>
+            <button id="uploadProjectButton" type="button">작업 불러오기</button>
+            <button id="clearAutosave" type="button">자동 저장본 삭제</button>
+            <button id="exportBundle" class="primary" type="button">Export ZIP</button>
+          </div>
+          <input id="projectFileInput" type="file" accept="application/json,.json" hidden />
+        </section>
+      </aside>
+    </div>
+
+    <dialog id="warningDialog">
+      <form method="dialog">
+        <h2>경고 확인</h2>
+        <div id="warningDialogBody" class="validation"></div>
+        <div class="dialogActions">
+          <button value="cancel">취소</button>
+          <button value="confirm" class="primary">계속</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./vendor/jszip.min.js?v=3.10.1"></script>
+    <script src="./editor.js?v=20260619-1"></script>
+  </body>
+</html>
