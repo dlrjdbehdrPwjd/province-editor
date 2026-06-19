@@ -1,0 +1,42 @@
+# world.yaml
+# Map/world coordinate settings used by the climate pipeline.
+# Keep the existing project latitude model. Do not replace it with 90 / -90.
+
+schema_version: "world.v0.1"
+
+map:
+  width_px: 8192
+  height_px: 3616
+
+latitude:
+  north_latitude: 70.0
+  south_latitude: -45.0
+  equator_y: 2201
+  mapping: "piecewise_equator"
+
+longitude:
+  left: -180.0
+  right: 180.0
+
+coordinate_system:
+  y_axis: "top_to_bottom"
+  x_axis: "left_to_right"
+
+heightmap:
+  authoritative: false
+  source: "ai_generated_placeholder"
+  format: "I;16"
+  elevation_scale:
+    raw_min: 0
+    raw_max: 65535
+    elevation_min_m: -500
+    elevation_max_m: 8000
+
+province:
+  # Reference only. Replace after build_province_graph reports measured stats.
+  median_area_px: 90
+
+climate_reference:
+  equator_temp_c: 24.0
+  pole_temp_c: -26.0
+  lapse_rate_c_per_km: 6.5

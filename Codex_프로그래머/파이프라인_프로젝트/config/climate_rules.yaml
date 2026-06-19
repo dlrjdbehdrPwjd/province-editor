@@ -1,0 +1,187 @@
+# climate_rules.yaml
+# Climate/terrain pipeline parameters.
+# Initial values only. Tune after validation/golden tests.
+
+schema_version: "climate_rules.v0.1"
+
+moisture_transport:
+  # Empirical baseline for the current generated map.
+  # 0.161 was the v0.2.6 initial tuning value; 0.28 is the accepted full-spinup
+  # map tuning with seasonal_climate.itcz_conversion_rate=0.10.
+  # Earlier physical-looking draft value 0.6 over-concentrated rainfall near coasts/ITCZ
+  # after the distance-survival kernel was introduced. Re-tune per map or validation set.
+  coastal_source_factor: 0.28
+  wetland_moisture_bonus: 0.15
+  leakage_min: 0.05
+  transport_length_px: 500.0
+  overflow_to_rainfall_factor: 1.0
+  improvement_epsilon: 0.000001
+  max_transport_iterations: 2000
+  base_capacity: 1.0
+  k_clausius: 0.07
+  T_ref: 15.0
+  capacity_min: 0.35
+  capacity_max: 2.25
+  # 0.30 was the v0.4 initial value; 0.10 is the accepted generated-map tuning
+  # to reduce ITCZ peak dominance while preserving inland baseline rainfall.
+  itcz_conversion_rate: 0.10
+  # Replace with measured province_graph stats after graph build.
+  median_area_px: 90
+  numeric_epsilon: 0.000001
+
+  wind_bands:
+    transition_width_deg: 4.0
+    bands:
+      - name: itcz
+        lat_min: 0
+        lat_max: 10
+        direction: [0.0, 1.0]
+        directionality: 0.20
+      - name: trade_winds
+        lat_min: 10
+        lat_max: 30
+        direction: [-1.0, 0.25]
+        directionality: 0.85
+      - name: westerlies
+        lat_min: 30
+        lat_max: 60
+        direction: [1.0, -0.15]
+        directionality: 0.75
+      - name: polar_easterlies
+        lat_min: 60
+        lat_max: 90
+        direction: [-1.0, 0.0]
+        directionality: 0.65
+
+mountain_barrier:
+  barrier_scale: 3.0
+  ridge_bonus: 0.5
+  windward_efficiency: 0.7
+  barrier_factor_max: 0.95
+
+bootstrap_fields:
+  mountain_average_elevation_m: 1500
+  mountain_flow_bonus: 0.5
+  max_coast_distance_hops: auto
+
+  elevation_hint_elevation_m:
+    none: 0
+    lowland: 100
+    upland: 500
+    highland: 1200
+    mountain: 2000
+
+  elevation_hint_flow_bonus:
+    none: 0.00
+    lowland: 0.05
+    upland: 0.15
+    highland: 0.35
+    mountain: 0.60
+
+seasonal_climate:
+  itcz_sigma: 5.0
+  itcz_scale: 1.0
+  subtropical_center: 25.0
+  subtropical_width: 10.0
+  subtropical_scale: 1.0
+  drain_strength: 0.06
+  suppression_factor: 0.20
+  itcz_conversion_rate: 0.30
+  northern_summer_itcz_offset: 5.0
+  summer_coastal_factor_multiplier: 1.1
+  winter_coastal_factor_multiplier: 0.9
+  base_seasonal_amplitude: 15.0
+  foehn_warming_factor: 0.5
+  foehn_mtn_threshold: 0.3
+  pet_coefficient: 0.1
+  bare_soil_coeff: 0.3
+  transpiration_coeff: 0.7
+  storage_capacity: 10.0
+  soil_storage_time_years: 5.0
+  # Temporary empirical baseline. 0.3 made deep-inland rainfall exceed coastal rainfall
+  # under the current distance-survival transport; revisit after real constraints/golden tests.
+  recycling_fraction: 0.018
+  max_recycling_share: 0.1
+  relaxation_alpha: 0.5
+  max_spinup_years: 50
+  climate_moisture_epsilon: 0.005
+  climate_recycling_epsilon: 0.005
+  soil_storage_epsilon: 0.001
+  numeric_epsilon: 0.000001
+
+hydrology:
+  river_threshold_percentile: 87
+  lake_threshold: 50.0
+  lake_full_threshold: 200.0
+  salt_flat_runoff_threshold: 5.0
+  wetland_rainfall_threshold: 30.0
+  wetland_storage_threshold: 20.0
+  river_bonus_factor: 0.05
+  river_bonus_decay: 50.0
+  open_water_factor: 1.0
+  # effective_runoff proxy used only when seasonal_climate annual_runoff is zero.
+  runoff_base_coeff: 0.10
+  runoff_saturation_weight: 0.20
+  runoff_dry_season_weight: 0.15
+  runoff_coeff_min: 0.02
+  runoff_coeff_max: 0.45
+
+rainfall_normalization:
+  world_scale: 1.0
+  relative_weight: 0.7
+  relative_curve_gamma: 1.0
+  absolute_clamp_min: 0.0
+  absolute_clamp_max: 1.5
+  final_min: 0.0
+  final_max: 1.5
+  numeric_epsilon: 0.000001
+
+koppen_biome_terrain:
+  epsilon: 0.000001
+  aridity_cap: 3.0
+
+  soil_moisture:
+    # Tuned v0.7 biome/aridity scale. Current cosine temperature baseline
+    # (equator_temp=24, pole_temp=-26) leaves subtropical deserts cooler than
+    # Earth analogs; et_world_scale=12.0 restores dry-climate coverage without
+    # pushing tropical aridity below the current diagnostic safety margin.
+    et_world_scale: 12.0
+    et_clamp_min: 0.0
+    et_clamp_max: 1.5
+    river_bonus_world_scale: 1.0
+    river_bonus_clamp_min: 0.0
+    river_bonus_clamp_max: 0.5
+    lake_moisture_bonus: 0.25
+    wetland_seed_soil_bonus: 0.20
+    soil_moisture_min: -1.0
+    soil_moisture_max: 1.0
+    soil_moisture_cap: 1.5
+    river_corridor_soil_min: 0.35
+    dry_steppe_soil_max: 0.25
+    grassland_soil_min: 0.45
+
+  elevation:
+    upland_threshold_m: 500
+    highland_threshold_m: 1200
+    mountain_threshold_m: 1800
+    highland_cool_summer_threshold: 18.0
+
+  koppen:
+    b_base_threshold: 0.50
+    b_summer_rain_multiplier: 1.15
+    b_even_rain_multiplier: 1.00
+    b_winter_rain_multiplier: 0.85
+    summer_dominant_threshold: 0.70
+    winter_dominant_threshold: 0.70
+    desert_fraction: 0.50
+    b_hot_threshold_c: 18.0
+    ice_cap_summer_threshold: 0.0
+    tundra_summer_threshold: 10.0
+    tropical_coldest_threshold: 18.0
+    tropical_af_dry_strength_max: 0.25
+    tropical_monsoon_dry_rain_min: 0.15
+    temperate_warmest_min: 10.0
+    continental_winter_threshold: 0.0
+    no_dry_season_strength_max: 0.25
+    hot_summer_threshold: 22.0
+    warm_summer_threshold: 10.0

@@ -1,0 +1,33 @@
+regions:
+  - name: demon_wasteland
+    enabled: false
+    mask: masks/demon_wasteland.png
+    force_terrain: desert
+    force_biome: corrupted_wasteland
+    rainfall_delta: -0.25
+    temperature_delta: 1
+    add_state_traits:
+      - state_trait_corrupted_land
+
+  - name: elven_ancient_forest
+    enabled: false
+    mask: masks/elven_forest.png
+    force_biome: enchanted_forest
+    rainfall_delta: 0.15
+    add_state_traits:
+      - state_trait_enchanted_forest
+
+currents:
+  - name: eternal_cold_current
+    enabled: false
+    type: cold
+    path: [[6200, 800], [5900, 1800]]
+    strength: 0.8
+
+manual_override_policy:
+  force_terrain: replace_terrain_only
+  force_biome: replace_biome_only
+  add_state_traits: append
+  remove_state_traits: remove
+  temperature_delta: add
+  rainfall_delta: add

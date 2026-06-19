@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Regenerable pipeline outputs
+cache/
+
+# Keep only selected representative debug images in git.
+outputs/*
+!outputs/debug/
+outputs/debug/*
+!outputs/debug/annual_rainfall_raw_map.png
+!outputs/debug/annual_rainfall_log_map.png
+!outputs/debug/zonal_mean_rainfall.png
+!outputs/debug/draft_rivers.png
+!outputs/debug/koppen_class_map.png
+!outputs/debug/biome_map.png
+!outputs/debug/terrain_map.png
+!outputs/debug/aridity_index_map.png
+!outputs/debug/soil_moisture_map.png
+!outputs/debug/corrected_ET_scaled_map.png
+!outputs/debug/river_bonus_scaled_map.png
+!outputs/draft_rivers.png
+
+# Ad-hoc tuning outputs
+*.tuning.json
+*.tuning2.json
+*.test.json
+*.v041.tuning.json

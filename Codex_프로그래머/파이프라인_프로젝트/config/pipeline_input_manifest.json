@@ -1,0 +1,51 @@
+{
+  "schema_version": "pipeline_input_manifest.v0.1",
+  "pipeline_version": "pipeline_orchestration.v0.1",
+  "_comment": "파이프라인_프로젝트/ 기준 상대 경로. v0.1 확정 계약에 맞춘 입력 묶음.",
+
+  "map_data": {
+    "map_data_dir": "../map_data/",
+    "provinces_png": "../map_data/provinces.png",
+    "default_map": "../map_data/default.map",
+    "world_yaml": "config/world.yaml",
+    "heightmap_png": "../map_data/heightmap.png",
+    "water_mask_png": null
+  },
+
+  "inputs": {
+    "_comment": "기본값은 multi-user merge 결과 revision 저장소를 가리킨다. 단일 작업 시 실제 revision_dir_name으로 치환한다.",
+    "province_constraints": "revisions/{revision_dir_name}/province_constraints.yaml",
+    "province_overrides": "revisions/{revision_dir_name}/province_overrides.yaml",
+    "climate_rules": "config/climate_rules.yaml",
+    "terrain_lookup": "config/terrain_lookup.csv"
+  },
+
+  "runtime": {
+    "cache_dir": "cache/",
+    "outputs_dir": "outputs/"
+  },
+
+  "cache": {
+    "province_graph": "cache/province_graph.json",
+    "bootstrap_fields": "cache/bootstrap_fields.json",
+    "seasonal_climate": "cache/seasonal_climate.json",
+    "hydrology": "cache/hydrology.json",
+    "rainfall_normalized": "cache/rainfall_normalized.json",
+    "koppen_biome_terrain": "cache/koppen_biome_terrain.json"
+  },
+
+  "manifest": {
+    "run_manifest_latest": "cache/pipeline_run_manifest.json",
+    "run_manifest_history_dir": "cache/pipeline_runs/"
+  },
+
+  "outputs": {
+    "draft_rivers_png": "outputs/draft_rivers.png",
+    "debug_dir": "outputs/debug/"
+  },
+
+  "validation": {
+    "pre_registration": "validation/golden_runs/{test_id}/pre_registration.yaml",
+    "reference_dir": "validation/reference/"
+  }
+}
