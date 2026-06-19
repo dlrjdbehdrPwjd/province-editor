@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>프로빈스 편집기</title>
-    <link rel="stylesheet" href="./style.css?v=20260616-4" />
+    <link rel="stylesheet" href="./style.css?v=20260619-5" />
   </head>
   <body>
     <div class="shell">
@@ -99,6 +99,18 @@
               <label><input id="riverMajor" type="checkbox" /> 주요 하천</label>
               <label><input id="lakeSeed" type="checkbox" /> 호수·종착점</label>
               <label><input id="wetlandSeed" type="checkbox" /> 습지 발생점</label>
+            </div>
+            <div class="riverPathEditor">
+              <div class="riverPathHeader">
+                <strong>강 경로</strong>
+                <span id="riverPathStatus" class="fieldValue">미설정</span>
+              </div>
+              <small class="fieldHelp">시작 프로빈스를 선택한 뒤 기록을 시작하고, 하류 방향으로 인접 프로빈스를 차례대로 클릭하세요.</small>
+              <div class="riverPathActions">
+                <button id="toggleRiverPath" type="button">경로 기록 시작</button>
+                <button id="undoRiverPath" type="button" disabled>마지막 점 취소</button>
+                <button id="clearRiverPath" type="button" disabled>경로 삭제</button>
+              </div>
             </div>
           </fieldset>
 
@@ -199,6 +211,6 @@
     </dialog>
 
     <script src="./vendor/jszip.min.js?v=3.10.1"></script>
-    <script src="./editor.js?v=20260619-1"></script>
+    <script src="./editor.js?v=20260619-6"></script>
   </body>
 </html>

@@ -127,6 +127,13 @@ input[type="checkbox"] { width: 17px; min-height: 17px; accent-color: var(--acce
 .checks { grid-template-columns: 1fr 1fr; }
 .checks label, .inlineCheck { display: flex; align-items: center; gap: 7px; }
 
+.riverPathEditor { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.riverPathHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.riverPathHeader strong { color: var(--text); }
+.riverPathActions { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 6px; margin-top: 8px; }
+.riverPathEditor.recording { padding: 10px; border: 1px solid var(--accent); border-radius: 5px; background: var(--accent-bg); }
+.riverPathEditor.recording .riverPathHeader strong::after { content: " 기록 중"; color: var(--accent); }
+
 fieldset { margin: 12px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; }
 legend { padding: 0 5px; color: var(--muted); font-size: 12px; }
 .switchRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px; background: #181c21; border: 1px solid var(--line); border-radius: 5px; }

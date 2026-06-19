@@ -30,6 +30,9 @@ const state = {
   autosaveTimer: null,
   autosaveInterval: null,
   suppressAutosave: false,
+  riverPathRecording: false,
+  riverPathOwner: null,
+  riverPathDraft: [],
 };
 
 const canvas = document.getElementById("mapCanvas");
@@ -129,6 +132,9 @@ function bindEvents() {
   $("projectFileInput").addEventListener("change", handleProjectFile);
   $("clearAutosave").addEventListener("click", clearAutosave);
   $("exportBundle").addEventListener("click", beginExport);
+  $("toggleRiverPath").addEventListener("click", toggleRiverPathRecording);
+  $("undoRiverPath").addEventListener("click", undoRiverPathPoint);
+  $("clearRiverPath").addEventListener("click", clearRiverPath);
   $("editorId").addEventListener("input", () => scheduleAutosave(AUTOSAVE_DEBOUNCE_MS));
   $("mountainStrength").addEventListener("input", updateMountainLabel);
   $("mountainEnabled").addEventListener("change", updateMountainControl);
@@ -159,6 +165,7 @@ function handleShortcut(event) {
 }
 
 function setMode(mode) {
+  if (state.riverPathRecording) cancelRiverPathRecording();
   state.mode = mode;
   updateModeUi();
   loadCurrentEditValues();
@@ -219,6 +226,7 @@ function selectAt(event) {
   const pixel = pickCtx.getImageData(x, y, 1, 1).data;
   const color = rgbToKey(pixel[0], pixel[1], pixel[2]);
   if (!state.data.provinceIndex.provinces[color]) return clearSelection();
+  if (state.riverPathRecording) return appendRiverPathPoint(color);
   state.selectedColor = color;
   state.selectedState = state.data.stateIndex.province_to_state[color] || null;
   updateSelectionPanel();
@@ -236,6 +244,7 @@ function keyToRgb(color) {
 }
 
 function clearSelection() {
+  if (state.riverPathRecording) cancelRiverPathRecording();
   state.selectedColor = null;
   state.selectedState = null;
   updateSelectionPanel();
@@ -249,6 +258,154 @@ function updateSelectionPanel() {
   $("selectedColor").textContent = state.selectedColor || "-";
   $("selectedState").textContent = state.selectedState || "-";
   $("selectedArea").textContent = province ? province.area_pixels.toLocaleString() : "-";
+}
+
+function toggleRiverPathRecording() {
+  if (state.riverPathRecording) return finishRiverPathRecording();
+  if (state.mode !== "province" || !state.selectedColor) {
+    return setStatus("강 경로를 시작할 프로빈스를 먼저 선택하세요.");
+  }
+  if (isSeaProvince(state.selectedColor)) return setStatus("강 경로는 육지 프로빈스에서 시작해야 합니다.");
+  const saved = state.constraints.provinces[state.selectedColor]?.river_path;
+  state.riverPathRecording = true;
+  state.riverPathOwner = state.selectedColor;
+  state.riverPathDraft = Array.isArray(saved) && saved.length ? [...saved] : [state.selectedColor];
+  updateRiverPathUi();
+  drawSelection();
+  setStatus("강 경로 기록 중 · 하류 방향으로 인접 프로빈스를 클릭하세요.");
+}
+
+function finishRiverPathRecording() {
+  if (!state.riverPathRecording) return;
+  if (state.riverPathDraft.length < 2) {
+    return setStatus("강 경로에는 시작점과 하류 지점이 하나 이상 필요합니다.");
+  }
+  const owner = state.riverPathOwner;
+  const previous = state.constraints.provinces[owner] || {};
+  const next = { ...previous, river_path: [...state.riverPathDraft] };
+  state.constraints.provinces[owner] = next;
+  recordEdits(owner, changedFields(previous, next), false);
+  state.riverPathRecording = false;
+  state.riverPathOwner = null;
+  state.riverPathDraft = [];
+  redrawBaseMap();
+  drawSelection();
+  updateRiverPathUi();
+  updateTrackingUi();
+  updateValidation();
+  markDirty();
+  setStatus(`강 경로 저장 완료 · ${next.river_path.length.toLocaleString()}개 프로빈스`);
+}
+
+function cancelRiverPathRecording() {
+  state.riverPathRecording = false;
+  state.riverPathOwner = null;
+  state.riverPathDraft = [];
+  updateRiverPathUi();
+  drawSelection();
+}
+
+function appendRiverPathPoint(color) {
+  const path = state.riverPathDraft;
+  const previous = path[path.length - 1];
+  if (color === previous) return;
+  if (isSeaProvince(previous)) {
+    return setStatus("바다 프로빈스는 강 경로의 마지막 지점으로만 사용할 수 있습니다.");
+  }
+  if (path.includes(color)) return setStatus("같은 프로빈스를 경로에 두 번 넣을 수 없습니다.");
+  if (!areAdjacentProvinces(previous, color)) {
+    return setStatus("강 경로는 서로 맞닿은 프로빈스만 차례대로 연결할 수 있습니다.");
+  }
+  path.push(color);
+  updateRiverPathUi();
+  drawSelection();
+  setStatus(`강 경로 기록 중 · ${path.length.toLocaleString()}개 프로빈스`);
+}
+
+function undoRiverPathPoint() {
+  if (!state.riverPathRecording || state.riverPathDraft.length <= 1) return;
+  state.riverPathDraft.pop();
+  updateRiverPathUi();
+  drawSelection();
+  setStatus(`마지막 지점 취소 · ${state.riverPathDraft.length.toLocaleString()}개 프로빈스`);
+}
+
+function clearRiverPath() {
+  const owner = state.riverPathRecording ? state.riverPathOwner : state.selectedColor;
+  if (!owner) return;
+  const previous = state.constraints.provinces[owner] || {};
+  if (state.riverPathRecording) cancelRiverPathRecording();
+  if (!Object.prototype.hasOwnProperty.call(previous, "river_path")) {
+    updateRiverPathUi();
+    return setStatus("삭제할 강 경로가 없습니다.");
+  }
+  const next = { ...previous };
+  delete next.river_path;
+  if (Object.keys(next).length) state.constraints.provinces[owner] = next;
+  else delete state.constraints.provinces[owner];
+  recordEdits(owner, ["river_path"], false);
+  redrawBaseMap();
+  drawSelection();
+  updateRiverPathUi();
+  updateTrackingUi();
+  updateValidation();
+  markDirty();
+  setStatus("강 경로 삭제 완료");
+}
+
+function currentRiverPath() {
+  if (state.riverPathRecording) return state.riverPathDraft;
+  if (state.mode !== "province" || !state.selectedColor) return [];
+  const path = state.constraints.provinces[state.selectedColor]?.river_path;
+  return Array.isArray(path) ? path : [];
+}
+
+function isSeaProvince(color) {
+  const stateId = color ? state.data.stateIndex.province_to_state[color] : null;
+  return typeof stateId === "string" && /(?:^|_)SEA(?:_|$)/i.test(stateId);
+}
+
+function updateRiverPathUi() {
+  const editor = document.querySelector(".riverPathEditor");
+  if (!editor) return;
+  const path = currentRiverPath();
+  const available = state.mode === "province" && Boolean(state.selectedColor);
+  editor.classList.toggle("recording", state.riverPathRecording);
+  $("riverPathStatus").textContent = path.length ? `${path.length.toLocaleString()}개 프로빈스` : "미설정";
+  $("toggleRiverPath").textContent = state.riverPathRecording ? "경로 기록 완료" : "경로 기록 시작";
+  $("toggleRiverPath").disabled = !available;
+  $("undoRiverPath").disabled = !state.riverPathRecording || path.length <= 1;
+  $("clearRiverPath").disabled = !state.riverPathRecording && path.length === 0;
+  $("applyConstraint").disabled = state.riverPathRecording;
+  $("clearConstraint").disabled = state.riverPathRecording;
+}
+
+function areAdjacentProvinces(colorA, colorB) {
+  const province = state.data.provinceIndex.provinces[colorA];
+  if (!province) return false;
+  const [rawX, rawY, rawWidth, rawHeight] = provincePreviewRect(province);
+  const sx = Math.max(0, rawX - 1);
+  const sy = Math.max(0, rawY - 1);
+  const ex = Math.min(pickCanvas.width, rawX + rawWidth + 1);
+  const ey = Math.min(pickCanvas.height, rawY + rawHeight + 1);
+  const width = ex - sx;
+  const height = ey - sy;
+  const data = pickCtx.getImageData(sx, sy, width, height).data;
+  const rgbA = keyToRgb(colorA);
+  const rgbB = keyToRgb(colorB);
+  const matches = (x, y, rgb) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return false;
+    const i = (y * width + x) * 4;
+    return data[i] === rgb[0] && data[i + 1] === rgb[1] && data[i + 2] === rgb[2];
+  };
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!matches(x, y, rgbA)) continue;
+      if (matches(x - 1, y, rgbB) || matches(x + 1, y, rgbB)
+        || matches(x, y - 1, rgbB) || matches(x, y + 1, rgbB)) return true;
+    }
+  }
+  return false;
 }
 
 function activeKey() { return state.mode === "state" ? state.selectedState : state.selectedColor; }
@@ -270,6 +427,7 @@ function loadCurrentEditValues() {
   $("riverMajor").checked = Boolean(source.river_major);
   $("lakeSeed").checked = Boolean(source.lake_seed);
   $("wetlandSeed").checked = Boolean(source.wetland_seed);
+  updateRiverPathUi();
 
   if (state.mode === "province" && state.selectedColor) {
     const override = state.constraints.overrides[state.selectedColor] || {};
@@ -310,6 +468,7 @@ function clearForm() {
   $("mountainStrength").value = 0;
   updateMountainControl();
   updateOverrideControls();
+  updateRiverPathUi();
 }
 
 function updateMountainControl() {
@@ -352,6 +511,8 @@ function formConstraint() {
     if ($("riverMajor").checked) item.river_major = true;
     if ($("lakeSeed").checked) item.lake_seed = true;
     if ($("wetlandSeed").checked) item.wetland_seed = true;
+    const savedPath = state.selectedColor ? state.constraints.provinces[state.selectedColor]?.river_path : null;
+    if (Array.isArray(savedPath) && savedPath.length) item.river_path = [...savedPath];
   }
   return item;
 }
@@ -506,7 +667,9 @@ function validateOverride(item) {
 function validateCurrentForm() {
   const result = state.mode === "province" ? validateOverride(formOverride()) : { errors: [], warnings: [] };
   if (state.mode === "province" && $("lakeSeed").checked && $("riverSeed").checked) result.warnings.push("호수·종착점과 강 시작점이 같이 지정되어 있습니다. 이 경우 호수·종착점이 우선됩니다.");
-  if (state.mode === "province" && $("riverMajor").checked && !$("riverSeed").checked) result.warnings.push("주요 하천은 강 시작점이 있을 때만 유효합니다.");
+  if (state.mode === "province" && $("riverMajor").checked && !$("riverSeed").checked && currentRiverPath().length === 0) {
+    result.warnings.push("주요 하천은 강 시작점 또는 강 경로가 있을 때만 유효합니다.");
+  }
   return result;
 }
 
@@ -553,6 +716,43 @@ function drawSelection() {
   } else {
     drawProvinceMask(state.selectedColor, [38, 190, 230, 168]);
   }
+  drawRiverPathOverlay(currentRiverPath());
+}
+
+function drawRiverPathOverlay(path) {
+  if (!Array.isArray(path) || path.length === 0) return;
+  for (const color of path) drawProvinceMask(color, [39, 174, 230, 92]);
+  const points = path
+    .map((color) => provincePreviewCenter(color))
+    .filter(Boolean);
+  if (!points.length) return;
+  octx.save();
+  octx.lineCap = "round";
+  octx.lineJoin = "round";
+  octx.lineWidth = 3;
+  octx.strokeStyle = "rgba(52, 199, 255, 0.95)";
+  octx.beginPath();
+  points.forEach(([x, y], index) => index ? octx.lineTo(x, y) : octx.moveTo(x, y));
+  octx.stroke();
+  octx.font = "bold 10px Segoe UI, sans-serif";
+  octx.textAlign = "center";
+  octx.textBaseline = "middle";
+  points.forEach(([x, y], index) => {
+    octx.beginPath();
+    octx.fillStyle = index === 0 ? "#57d17d" : (index === points.length - 1 ? "#ffb34d" : "#28aede");
+    octx.arc(x, y, 6, 0, Math.PI * 2);
+    octx.fill();
+    octx.fillStyle = "#101418";
+    octx.fillText(String(index + 1), x, y + 0.5);
+  });
+  octx.restore();
+}
+
+function provincePreviewCenter(color) {
+  const province = state.data.provinceIndex.provinces[color];
+  if (!province) return null;
+  const [x, y, width, height] = provincePreviewRect(province);
+  return [x + width / 2, y + height / 2];
 }
 
 function redrawBaseMap() {
@@ -565,6 +765,10 @@ function redrawBaseMap() {
     for (const color of currentState.provinces) paintProvinceColor(color, colorForConstraint(item));
   }
   for (const [color, item] of Object.entries(state.constraints.provinces)) paintProvinceColor(color, colorForConstraint(item));
+  for (const item of Object.values(state.constraints.provinces)) {
+    if (!Array.isArray(item.river_path)) continue;
+    for (const color of item.river_path) paintProvinceColor(color, [74, 158, 205]);
+  }
   for (const [color, item] of Object.entries(state.constraints.overrides)) {
     const fill = colorForOverride(item);
     if (fill) paintProvinceColor(color, fill);
@@ -573,6 +777,8 @@ function redrawBaseMap() {
 
 function colorForConstraint(item) {
   if (item.fantasy_zone) return [174, 112, 210];
+  if (item.river_major) return [49, 125, 184];
+  if (item.river_seed || item.river_path) return [74, 158, 205];
   if (item.elevation_hint === "mountain" || Number(item.mountain_strength || 0) >= .8) return [150, 142, 130];
   if (item.elevation_hint === "highland" || Number(item.mountain_strength || 0) > 0) return [177, 151, 105];
   if (item.wetland_seed || item.lake_seed || Number(item.moisture_bonus || 0) > 0) return [104, 178, 168];
@@ -780,6 +986,9 @@ function restoreProjectState(project, options = {}) {
   }
 
   state.suppressAutosave = true;
+  state.riverPathRecording = false;
+  state.riverPathOwner = null;
+  state.riverPathDraft = [];
   const warnings = [];
   const constraints = project.constraints || {};
   state.constraints = {
@@ -1021,7 +1230,28 @@ function validateAll() {
   }
   for (const [color, item] of Object.entries(state.constraints.provinces)) {
     if (item.lake_seed && item.river_seed) warnings.push(`${color}: 호수·종착점과 강 시작점이 같이 지정되어 있습니다. 이 경우 호수·종착점이 우선됩니다.`);
-    if (item.river_major && !item.river_seed && !item.river_path) warnings.push(`${color}: 주요 하천은 강 시작점이 있을 때만 유효합니다.`);
+    if (item.river_major && !item.river_seed && !item.river_path) warnings.push(`${color}: 주요 하천은 강 시작점 또는 강 경로가 있을 때만 유효합니다.`);
+    if (item.river_path !== undefined) {
+      if (!Array.isArray(item.river_path) || item.river_path.length < 2) {
+        errors.push(`${color}: 강 경로에는 프로빈스가 2개 이상 필요합니다.`);
+        continue;
+      }
+      if (item.river_path[0] !== color) errors.push(`${color}: 강 경로의 첫 프로빈스는 경로 소유 프로빈스와 같아야 합니다.`);
+      if (new Set(item.river_path).size !== item.river_path.length) errors.push(`${color}: 강 경로에 중복 프로빈스가 있습니다.`);
+      for (const pathColor of item.river_path) {
+        if (!validProvince(pathColor)) errors.push(`${color}: 강 경로에 현재 지도에 없는 프로빈스가 있습니다: ${pathColor}`);
+      }
+      for (let index = 1; index < item.river_path.length; index += 1) {
+        const upstream = item.river_path[index - 1];
+        const downstream = item.river_path[index];
+        if (validProvince(upstream) && validProvince(downstream) && !areAdjacentProvinces(upstream, downstream)) {
+          errors.push(`${color}: 서로 맞닿지 않은 강 경로입니다: ${upstream} → ${downstream}`);
+        }
+        if (index < item.river_path.length - 1 && isSeaProvince(downstream)) {
+          errors.push(`${color}: 바다 프로빈스는 강 경로의 마지막 지점으로만 사용할 수 있습니다.`);
+        }
+      }
+    }
   }
   return { errors, warnings };
 }
