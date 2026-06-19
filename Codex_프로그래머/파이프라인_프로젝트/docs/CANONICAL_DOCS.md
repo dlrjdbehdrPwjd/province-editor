@@ -31,6 +31,7 @@ Override semantics:
 
 Pipeline orchestration:
   docs/pipeline_orchestration_spec_v0.1.md
+  docs/pipeline_run_manifest_spec_v0.1.md
 
 Validation / golden tests:
   docs/validation_and_golden_tests_spec_v0.1.md
