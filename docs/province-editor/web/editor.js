@@ -145,6 +145,10 @@ function bindEvents() {
   $("provinceMode").addEventListener("click", () => setMode("province"));
   $("stateMode").addEventListener("click", () => setMode("state"));
   $("countryOverlay").addEventListener("click", toggleCountryOverlay);
+  $("provinceSearchButton").addEventListener("click", runProvinceSearch);
+  $("provinceSearch").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") runProvinceSearch();
+  });
   $("zoomIn").addEventListener("click", () => setZoom(state.scale * 1.25));
   $("zoomOut").addEventListener("click", () => setZoom(state.scale / 1.25));
   $("zoom1").addEventListener("click", () => setZoom(1));
@@ -315,6 +319,72 @@ function clearSelection() {
   clearForm();
   drawSelection();
   scheduleAutosave(AUTOSAVE_DEBOUNCE_MS);
+}
+
+function runProvinceSearch() {
+  const input = $("provinceSearch").value.trim();
+  if (!input) return setStatus("검색어를 입력하세요.");
+  const result = resolveSearchTarget(input);
+  if (!result) return setStatus(`검색 결과가 없습니다: ${input}`);
+  selectSearchTarget(result);
+}
+
+function resolveSearchTarget(input) {
+  const normalized = input.trim();
+  const upper = normalized.toUpperCase();
+  const provinceColor = upper.startsWith("X") ? `x${upper.slice(1)}` : `x${upper}`;
+  if (/^x[0-9A-F]{6}$/.test(provinceColor) && validProvince(provinceColor)) {
+    return { type: "province", color: provinceColor };
+  }
+
+  const states = state.data.stateIndex.states || {};
+  const exactState = states[upper] ? upper : null;
+  const partialState = exactState || Object.keys(states).find((key) => key.includes(upper));
+  if (partialState && states[partialState]?.provinces?.length) {
+    return { type: "state", stateId: partialState, color: states[partialState].provinces[0] };
+  }
+
+  const countryIndex = state.data.countryIndex;
+  if (countryIndex?.countries) {
+    const exactTag = countryIndex.countries[upper] ? upper : null;
+    const partialTag = exactTag || Object.keys(countryIndex.countries).find((tag) => tag.includes(upper));
+    const provinces = partialTag ? countryIndex.countries[partialTag]?.provinces : null;
+    const color = Array.isArray(provinces) ? provinces.find(validProvince) : null;
+    if (color) return { type: "country", tag: partialTag, color };
+  }
+
+  return null;
+}
+
+function selectSearchTarget(result) {
+  state.selectedColor = result.color;
+  state.selectedState = state.data.stateIndex.province_to_state[result.color] || null;
+  if (result.type === "state") {
+    setMode("state");
+    state.selectedState = result.stateId;
+    state.selectedStates = [result.stateId];
+  } else {
+    setMode("province");
+    state.selectedStates = [];
+  }
+  centerOnProvince(result.color);
+  updateSelectionPanel();
+  loadCurrentEditValues();
+  drawSelection();
+  const label = result.type === "country" ? `${result.tag} / ${result.color}` : result.type === "state" ? `${result.stateId} / ${result.color}` : result.color;
+  setStatus(`검색 이동: ${label}`);
+  scheduleAutosave(AUTOSAVE_DEBOUNCE_MS);
+}
+
+function centerOnProvince(color) {
+  const province = state.data.provinceIndex.provinces[color];
+  if (!province?.bbox) return;
+  if (state.scale < 1) setZoom(1);
+  const [minX, minY, maxX, maxY] = province.bbox;
+  const centerX = (minX + maxX + 1) / 2;
+  const centerY = (minY + maxY + 1) / 2;
+  wrap.scrollLeft = Math.max(0, centerX * state.scale - wrap.clientWidth / 2);
+  wrap.scrollTop = Math.max(0, centerY * state.scale - wrap.clientHeight / 2);
 }
 
 function updateSelectionPanel() {
