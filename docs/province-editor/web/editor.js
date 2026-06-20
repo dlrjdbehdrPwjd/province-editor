@@ -23,6 +23,8 @@ const state = {
   selectedColor: null,
   selectedState: null,
   selectedStates: [],
+  countryOverlayVisible: false,
+  countryBordersImage: null,
   assetVersion: Date.now(),
   baseRevision: null,
   constraints: { states: {}, provinces: {}, overrides: {} },
@@ -54,17 +56,28 @@ async function loadJson(path) {
   return response.json();
 }
 
+async function loadOptionalJson(path) {
+  try {
+    return await loadJson(path);
+  } catch (error) {
+    console.warn(`optional data unavailable: ${path}`, error);
+    return null;
+  }
+}
+
 async function init() {
   try {
-    const [provinceIndex, stateIndex] = await Promise.all([
+    const [provinceIndex, stateIndex, countryIndex] = await Promise.all([
       loadJson("../data/province_index.json"),
       loadJson("../data/state_index.json"),
+      loadOptionalJson("../data/country_index.json"),
     ]);
-    state.data = { provinceIndex, stateIndex };
+    state.data = { provinceIndex, stateIndex, countryIndex };
     state.previewScale = Number(provinceIndex.preview_scale || 1);
     await Promise.all([
       loadDisplayImage("../data/map_preview.png"),
       loadPickImage("../data/province_pick.png"),
+      loadOptionalDisplayImage("../data/country_borders.png", (image) => { state.countryBordersImage = image; }),
     ]);
     bindEvents();
     state.baseRevision = await hashSnapshot(emptySnapshot());
@@ -113,9 +126,25 @@ function loadPickImage(src) {
   });
 }
 
+function loadOptionalDisplayImage(src, onLoad) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      onLoad(image);
+      resolve();
+    };
+    image.onerror = () => {
+      console.warn(`optional image unavailable: ${src}`);
+      resolve();
+    };
+    image.src = cacheBust(src);
+  });
+}
+
 function bindEvents() {
   $("provinceMode").addEventListener("click", () => setMode("province"));
   $("stateMode").addEventListener("click", () => setMode("state"));
+  $("countryOverlay").addEventListener("click", toggleCountryOverlay);
   $("zoomIn").addEventListener("click", () => setZoom(state.scale * 1.25));
   $("zoomOut").addEventListener("click", () => setZoom(state.scale / 1.25));
   $("zoom1").addEventListener("click", () => setZoom(1));
@@ -182,6 +211,7 @@ function updateModeUi() {
   const isState = state.mode === "state";
   $("provinceMode").classList.toggle("active", !isState);
   $("stateMode").classList.toggle("active", isState);
+  $("countryOverlay").classList.toggle("active", state.countryOverlayVisible);
   $("selectedMode").textContent = isState ? "주" : "프로빈스";
   $("modeHelp").textContent = isState
     ? "입력한 조건을 선택한 주의 모든 프로빈스에 일괄 적용합니다."
@@ -193,6 +223,14 @@ function updateModeUi() {
     element.disabled = isState;
   });
   $("overrideSection").classList.toggle("disabledSection", isState);
+}
+
+function toggleCountryOverlay() {
+  if (!state.countryBordersImage) return setStatus("국가 경계 데이터가 없습니다. country_index를 먼저 생성하세요.");
+  state.countryOverlayVisible = !state.countryOverlayVisible;
+  $("countryOverlay").classList.toggle("active", state.countryOverlayVisible);
+  drawSelection();
+  setStatus(state.countryOverlayVisible ? "국가 경계 표시 켜짐" : "국가 경계 표시 꺼짐");
 }
 
 function setZoom(value) {
@@ -282,10 +320,12 @@ function clearSelection() {
 function updateSelectionPanel() {
   const province = state.selectedColor ? state.data.provinceIndex.provinces[state.selectedColor] : null;
   const stateIds = selectedStateIds();
+  const countryTag = selectedCountryTag();
   $("selectedColor").textContent = state.selectedColor || "-";
   $("selectedState").textContent = stateIds.length > 1
     ? `${stateIds[0]} 외 ${stateIds.length - 1}개`
     : (state.selectedState || "-");
+  $("selectedCountry").textContent = countryTag || "-";
   if (state.mode === "state" && stateIds.length > 1) {
     const provinces = selectedStateProvinceColors(stateIds);
     const area = provinces.reduce((sum, color) => sum + (state.data.provinceIndex.provinces[color]?.area_pixels || 0), 0);
@@ -293,6 +333,11 @@ function updateSelectionPanel() {
   } else {
     $("selectedArea").textContent = province ? province.area_pixels.toLocaleString() : "-";
   }
+}
+
+function selectedCountryTag() {
+  if (!state.selectedColor) return null;
+  return state.data.countryIndex?.province_to_country?.[state.selectedColor] || null;
 }
 
 function toggleRiverPathRecording() {
@@ -769,6 +814,7 @@ function clearOverlay() { octx.clearRect(0, 0, overlay.width, overlay.height); }
 
 function drawSelection() {
   clearOverlay();
+  drawCountryOverlay();
   if (state.mode === "state") {
     const stateIds = selectedStateIds();
     if (!stateIds.length) return;
@@ -783,6 +829,11 @@ function drawSelection() {
   if (!state.selectedColor) return;
   drawProvinceMask(state.selectedColor, [38, 190, 230, 168]);
   drawRiverPathOverlay(currentRiverPath());
+}
+
+function drawCountryOverlay() {
+  if (!state.countryOverlayVisible || !state.countryBordersImage) return;
+  octx.drawImage(state.countryBordersImage, 0, 0);
 }
 
 function drawRiverPathOverlay(path) {
@@ -941,6 +992,7 @@ function buildProjectState() {
       selected_color: state.selectedColor,
       selected_state: state.selectedState,
       selected_states: state.selectedStates,
+      country_overlay: state.countryOverlayVisible,
       zoom: state.scale,
     },
     constraints: { states: state.constraints.states, provinces: state.constraints.provinces },
@@ -1077,6 +1129,7 @@ function restoreProjectState(project, options = {}) {
   state.mode = ui.mode === "state" ? "state" : "province";
   state.selectedColor = validProvince(ui.selected_color) ? ui.selected_color : null;
   state.selectedState = validState(ui.selected_state) ? ui.selected_state : null;
+  state.countryOverlayVisible = Boolean(ui.country_overlay);
   state.selectedStates = Array.isArray(ui.selected_states)
     ? ui.selected_states.filter((stateId) => validState(stateId))
     : [];
