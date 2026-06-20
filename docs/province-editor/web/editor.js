@@ -22,6 +22,7 @@ const state = {
   previewScale: 1,
   selectedColor: null,
   selectedState: null,
+  selectedStates: [],
   assetVersion: Date.now(),
   baseRevision: null,
   constraints: { states: {}, provinces: {}, overrides: {} },
@@ -167,6 +168,10 @@ function handleShortcut(event) {
 function setMode(mode) {
   if (state.riverPathRecording) cancelRiverPathRecording();
   state.mode = mode;
+  if (mode === "province") state.selectedStates = [];
+  if (mode === "state" && state.selectedState && !state.selectedStates.length) {
+    state.selectedStates = [state.selectedState];
+  }
   updateModeUi();
   loadCurrentEditValues();
   drawSelection();
@@ -229,6 +234,26 @@ function selectAt(event) {
   if (state.riverPathRecording) return appendRiverPathPoint(color);
   state.selectedColor = color;
   state.selectedState = state.data.stateIndex.province_to_state[color] || null;
+  if (state.mode === "state") {
+    if (event.ctrlKey || event.metaKey) {
+      if (state.selectedState) {
+        const index = state.selectedStates.indexOf(state.selectedState);
+        if (index >= 0) state.selectedStates.splice(index, 1);
+        else state.selectedStates.push(state.selectedState);
+      }
+    } else {
+      state.selectedStates = state.selectedState ? [state.selectedState] : [];
+    }
+    if (!state.selectedStates.length) {
+      state.selectedColor = null;
+      state.selectedState = null;
+    } else if (!state.selectedStates.includes(state.selectedState)) {
+      state.selectedState = state.selectedStates[state.selectedStates.length - 1];
+      state.selectedColor = state.data.stateIndex.states[state.selectedState]?.provinces?.[0] || null;
+    }
+  } else {
+    state.selectedStates = [];
+  }
   updateSelectionPanel();
   loadCurrentEditValues();
   drawSelection();
@@ -247,6 +272,7 @@ function clearSelection() {
   if (state.riverPathRecording) cancelRiverPathRecording();
   state.selectedColor = null;
   state.selectedState = null;
+  state.selectedStates = [];
   updateSelectionPanel();
   clearForm();
   drawSelection();
@@ -255,9 +281,18 @@ function clearSelection() {
 
 function updateSelectionPanel() {
   const province = state.selectedColor ? state.data.provinceIndex.provinces[state.selectedColor] : null;
+  const stateIds = selectedStateIds();
   $("selectedColor").textContent = state.selectedColor || "-";
-  $("selectedState").textContent = state.selectedState || "-";
-  $("selectedArea").textContent = province ? province.area_pixels.toLocaleString() : "-";
+  $("selectedState").textContent = stateIds.length > 1
+    ? `${stateIds[0]} 외 ${stateIds.length - 1}개`
+    : (state.selectedState || "-");
+  if (state.mode === "state" && stateIds.length > 1) {
+    const provinces = selectedStateProvinceColors(stateIds);
+    const area = provinces.reduce((sum, color) => sum + (state.data.provinceIndex.provinces[color]?.area_pixels || 0), 0);
+    $("selectedArea").textContent = `${area.toLocaleString()} (${provinces.length.toLocaleString()}개 프로빈스)`;
+  } else {
+    $("selectedArea").textContent = province ? province.area_pixels.toLocaleString() : "-";
+  }
 }
 
 function toggleRiverPathRecording() {
@@ -408,13 +443,34 @@ function areAdjacentProvinces(colorA, colorB) {
   return false;
 }
 
-function activeKey() { return state.mode === "state" ? state.selectedState : state.selectedColor; }
+function selectedStateIds() {
+  if (state.mode !== "state") return [];
+  if (state.selectedStates.length) return [...state.selectedStates];
+  return state.selectedState ? [state.selectedState] : [];
+}
+
+function selectedStateProvinceColors(stateIds = selectedStateIds()) {
+  const colors = [];
+  const seen = new Set();
+  for (const stateId of stateIds) {
+    const item = state.data.stateIndex.states[stateId];
+    if (!item?.provinces?.length) continue;
+    for (const color of item.provinces) {
+      if (seen.has(color)) continue;
+      seen.add(color);
+      colors.push(color);
+    }
+  }
+  return colors;
+}
+
+function activeKey() { return state.mode === "state" ? selectedStateIds()[0] : state.selectedColor; }
 
 function loadCurrentEditValues() {
   clearForm();
   const key = activeKey();
   const source = state.mode === "state"
-    ? commonProvinceConstraintForState(key)
+    ? commonProvinceConstraintForStates(selectedStateIds())
     : (key ? state.constraints.provinces[key] || {} : {});
   $("elevationHint").value = source.elevation_hint ?? "";
   $("mountainEnabled").checked = Object.prototype.hasOwnProperty.call(source, "mountain_strength");
@@ -446,14 +502,18 @@ function loadCurrentEditValues() {
 }
 
 function commonProvinceConstraintForState(stateId) {
-  const stateItem = stateId ? state.data.stateIndex.states[stateId] : null;
-  if (!stateItem?.provinces?.length) return {};
+  return commonProvinceConstraintForStates(stateId ? [stateId] : []);
+}
+
+function commonProvinceConstraintForStates(stateIds) {
+  const provinces = selectedStateProvinceColors(stateIds);
+  if (!provinces.length) return {};
   const result = {};
-  const first = state.constraints.provinces[stateItem.provinces[0]] || {};
+  const first = state.constraints.provinces[provinces[0]] || {};
   for (const field of STATE_BATCH_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(first, field)) continue;
     const value = JSON.stringify(first[field]);
-    if (stateItem.provinces.every((color) => {
+    if (provinces.every((color) => {
       const item = state.constraints.provinces[color] || {};
       return Object.prototype.hasOwnProperty.call(item, field) && JSON.stringify(item[field]) === value;
     })) result[field] = first[field];
@@ -538,11 +598,12 @@ function applyConstraint() {
   if (!key) return setStatus("먼저 지도에서 대상을 선택하세요.");
   const next = formConstraint();
   if (state.mode === "state") {
-    const stateItem = state.data.stateIndex.states[key];
-    if (!stateItem?.provinces?.length) return setStatus("선택한 주에 프로빈스 정보가 없습니다.");
+    const stateIds = selectedStateIds();
+    const provinces = selectedStateProvinceColors(stateIds);
+    if (!provinces.length) return setStatus("먼저 주를 선택하세요.");
     if (!Object.keys(next).length) return setStatus("일괄 적용할 조건을 하나 이상 입력하세요.");
     let changedCount = 0;
-    for (const color of stateItem.provinces) {
+    for (const color of provinces) {
       const previous = state.constraints.provinces[color] || {};
       const merged = { ...previous, ...next };
       const changed = changedFields(previous, merged);
@@ -551,8 +612,8 @@ function applyConstraint() {
       recordEdits(color, changed, false);
       changedCount += 1;
     }
-    delete state.constraints.states[key];
-    setStatus(`${key}의 프로빈스 ${changedCount.toLocaleString()}개에 조건 일괄 적용`);
+    for (const stateId of stateIds) delete state.constraints.states[stateId];
+    setStatus(`${stateIds.length.toLocaleString()}개 주 · ${changedCount.toLocaleString()}개 프로빈스에 조건 일괄 적용`);
   } else {
     const previous = state.constraints.provinces[key] || {};
     const changed = changedFields(previous, next);
@@ -572,10 +633,11 @@ function clearConstraint() {
   const key = activeKey();
   if (!key) return;
   if (state.mode === "state") {
-    const stateItem = state.data.stateIndex.states[key];
-    if (!stateItem?.provinces?.length) return;
+    const stateIds = selectedStateIds();
+    const provinces = selectedStateProvinceColors(stateIds);
+    if (!provinces.length) return;
     let changedCount = 0;
-    for (const color of stateItem.provinces) {
+    for (const color of provinces) {
       const previous = state.constraints.provinces[color] || {};
       const next = { ...previous };
       for (const field of STATE_BATCH_FIELDS) delete next[field];
@@ -586,8 +648,8 @@ function clearConstraint() {
       recordEdits(color, changed, false);
       changedCount += 1;
     }
-    delete state.constraints.states[key];
-    setStatus(`${key}의 프로빈스 ${changedCount.toLocaleString()}개에서 조건 삭제`);
+    for (const stateId of stateIds) delete state.constraints.states[stateId];
+    setStatus(`${stateIds.length.toLocaleString()}개 주 · ${changedCount.toLocaleString()}개 프로빈스에서 조건 삭제`);
   } else {
     const previous = state.constraints.provinces[key] || {};
     delete state.constraints.provinces[key];
@@ -707,15 +769,19 @@ function clearOverlay() { octx.clearRect(0, 0, overlay.width, overlay.height); }
 
 function drawSelection() {
   clearOverlay();
-  if (!state.selectedColor) return;
-  if (state.mode === "state" && state.selectedState) {
-    const item = state.data.stateIndex.states[state.selectedState];
-    if (item) {
+  if (state.mode === "state") {
+    const stateIds = selectedStateIds();
+    if (!stateIds.length) return;
+    for (const stateId of stateIds) {
+      const item = state.data.stateIndex.states[stateId];
+      if (!item?.provinces?.length) continue;
       for (const color of item.provinces) drawProvinceMask(color, [255, 184, 48, 88]);
     }
-  } else {
-    drawProvinceMask(state.selectedColor, [38, 190, 230, 168]);
+    if (state.selectedColor) drawProvinceMask(state.selectedColor, [255, 230, 110, 136]);
+    return;
   }
+  if (!state.selectedColor) return;
+  drawProvinceMask(state.selectedColor, [38, 190, 230, 168]);
   drawRiverPathOverlay(currentRiverPath());
 }
 
@@ -870,7 +936,13 @@ function buildProjectState() {
       source: "../map_data/provinces.png",
       preview_scale: state.previewScale,
     },
-    ui: { mode: state.mode, selected_color: state.selectedColor, selected_state: state.selectedState, zoom: state.scale },
+    ui: {
+      mode: state.mode,
+      selected_color: state.selectedColor,
+      selected_state: state.selectedState,
+      selected_states: state.selectedStates,
+      zoom: state.scale,
+    },
     constraints: { states: state.constraints.states, provinces: state.constraints.provinces },
     overrides: state.constraints.overrides,
     tracking: { edited_fields: state.editedFields, edited_state_fields: state.editedStateFields },
@@ -1005,7 +1077,17 @@ function restoreProjectState(project, options = {}) {
   state.mode = ui.mode === "state" ? "state" : "province";
   state.selectedColor = validProvince(ui.selected_color) ? ui.selected_color : null;
   state.selectedState = validState(ui.selected_state) ? ui.selected_state : null;
+  state.selectedStates = Array.isArray(ui.selected_states)
+    ? ui.selected_states.filter((stateId) => validState(stateId))
+    : [];
   if (state.selectedColor) state.selectedState = state.data.stateIndex.province_to_state[state.selectedColor] || state.selectedState;
+  if (state.mode !== "state") state.selectedStates = [];
+  if (state.mode === "state" && state.selectedState && !state.selectedStates.includes(state.selectedState)) {
+    state.selectedStates.push(state.selectedState);
+  }
+  if (state.mode === "state" && !state.selectedState && state.selectedStates.length) {
+    state.selectedState = state.selectedStates[0];
+  }
   if (state.mode === "state" && state.selectedState && !state.selectedColor) {
     state.selectedColor = state.data.stateIndex.states[state.selectedState]?.provinces?.[0] || null;
   }
